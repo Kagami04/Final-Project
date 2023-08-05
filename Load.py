@@ -13,11 +13,11 @@ grid_y = 8
 
 # Create the face recognizer with the desired parameters
 face_recognizer = cv2.face.LBPHFaceRecognizer_create(radius=1, neighbors=8, grid_x=8, grid_y=8)
-face_recognizer.read(r'C:\Users\HENDRIX\PycharmProjects\face_detection\last.xml')
+face_recognizer.read(r'C:\Users\HENDRIX\PycharmProjects\pythonProject1\last.xml')
 
 cap = cv2.VideoCapture(0)  # If you want to recognize faces from a video, replace 0 with the video path
-known_faces_folder = r'C:\Users\HENDRIX\PycharmProjects\face_detection\known_faces'
-unknown_faces_folder = r'C:\Users\HENDRIX\PycharmProjects\face_detection\unknown_faces'
+known_faces_folder = r'C:\Users\HENDRIX\PycharmProjects\pythonProject1\known_faces'
+unknown_faces_folder = r'C:\Users\HENDRIX\PycharmProjects\pythonProject1\unknown_faces'
 
 name = {
     0: "Justine Ballelos",
