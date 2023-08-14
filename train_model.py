@@ -355,3 +355,145 @@ lbph_recognizer.save('firebase_augmented_mapping.xml')
 
 # ... (rest of the code)
 
+option 5 nadagdagan ng accuracy
+
+import numpy as np
+import cv2
+import os
+import firebase_admin
+from firebase_admin import credentials, storage
+import json
+import face_recognition as fr
+
+print(fr)
+
+with open('name_mapping.json', 'r') as f:
+    name_mapping = json.load(f)
+
+# Initialize Firebase
+cred = credentials.Certificate("./key.json")
+firebase_admin.initialize_app(cred, {
+    'storageBucket': 'images-23bb4.appspot.com'
+}, name='storage')
+
+# Function to crop the face region using Haar Cascade
+def crop_face(image):
+    face_cascade_path = './haarcascade_frontalface_alt.xml'
+    face_cascade = cv2.CascadeClassifier(face_cascade_path)
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=3)
+    if len(faces) > 0:
+        x, y, w, h = faces[0]
+        cropped_face = gray[y:y + h, x:x + w]
+        return cropped_face
+    return None
+
+# Function to apply histogram equalization
+def apply_histogram_equalization(image):
+    equalized_image = cv2.equalizeHist(image)
+    return equalized_image
+
+# Function to apply data augmentation to the images
+def apply_data_augmentation(image):
+    angle = np.random.randint(-20, 20)
+    rows, cols = image.shape
+    M = cv2.getRotationMatrix2D((cols / 2, rows / 2), angle, 1)
+    rotated_image = cv2.warpAffine(image, M, (cols, rows))
+
+    scale = np.random.uniform(0.8, 1.2)
+    scaled_image = cv2.resize(image, None, fx=scale, fy=scale)
+
+    if np.random.rand() < 0.5:
+        flipped_image = cv2.flip(image, 1)
+    else:
+        flipped_image = image
+
+    # Add brightness adjustment
+    brightness_factor = np.random.uniform(0.5, 1.5)
+    brightened_image = cv2.convertScaleAbs(image, alpha=brightness_factor, beta=0)
+
+    # Add slight distortion
+    distortion_factor = np.random.uniform(-0.05, 0.05)
+    distorted_image = image.copy()
+    for i in range(rows):
+        distorted_image[i] = np.roll(distorted_image[i], int(cols * distortion_factor))
+
+    return rotated_image, scaled_image, flipped_image, brightened_image, distorted_image
+
+# Function to apply data augmentation to the images at multiple scales
+def apply_data_augmentation_multiscale(image):
+    augmented_images = []
+
+    for scale in [0.8, 1.0, 1.2]:  # You can adjust the list of scales as needed
+        scaled_image = cv2.resize(image, None, fx=scale, fy=scale)
+        rotated_image, _, _, _, _ = apply_data_augmentation(scaled_image)
+        augmented_images.extend([scaled_image, rotated_image])
+
+    return augmented_images
+
+# Function to read and preprocess images for training with data augmentation from Firebase Storage
+def preprocess_images_from_firebase(bucket_name, save_folder):
+    faces = []
+    ids = []
+
+    bucket = storage.bucket(app=firebase_admin.get_app(name='storage'))
+    blobs = bucket.list_blobs(prefix=bucket_name)
+
+    for blob in blobs:
+        if blob.name.endswith(".jpg") or blob.name.endswith(".png"):
+            img_path = blob.name
+            print("img_path", img_path)
+            folder_name = os.path.dirname(img_path).split('/')[-1]
+            print("id: ", folder_name)
+
+            image_data = blob.download_as_bytes()
+            img_np = np.frombuffer(image_data, dtype=np.uint8)
+            test_img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+
+            if test_img is None:
+                print("Not Loaded Properly")
+                continue
+
+            cropped_face = crop_face(test_img)
+            if cropped_face is None:
+                print("No face detected in the image:", img_path)
+                continue
+
+            augmented_images = apply_data_augmentation_multiscale(cropped_face)
+            for idx, augmented_image in enumerate(augmented_images):
+                save_path = os.path.join(save_folder, f"{folder_name}_{idx}.jpg")
+                cv2.imwrite(save_path, augmented_image)
+                faces.append(augmented_image)
+                ids.append(int(folder_name))
+
+    return faces, ids
+
+# Function to train the classifier using LBPHFaceRecognizer
+def lbph_classifier(faces, ids):
+    lbph_classifier = cv2.face.LBPHFaceRecognizer.create(radius=1, neighbors=8, grid_x=8, grid_y=8)
+    lbph_classifier.train(faces, np.array(ids))
+    return lbph_classifier
+
+# Training will begin from here
+train_folder_path = 'images'
+save_folder = 'abay_ho'
+
+# Preprocess images with data augmentation
+faces, ids = preprocess_images_from_firebase(train_folder_path, save_folder)
+
+# Train the classifier with data augmentation
+augmented_faces = []
+augmented_ids = []
+for i in range(len(faces)):
+    face = faces[i]
+    label = ids[i]
+    rotated_face, scaled_face, flipped_face, brightened_face, distorted_face = apply_data_augmentation(face)
+    augmented_faces.extend([face, rotated_face, scaled_face, flipped_face, brightened_face, distorted_face])
+    augmented_ids.extend([label] * 6)
+
+# Train the classifier using the augmented data
+lbph_recognizer = lbph_classifier(augmented_faces, augmented_ids)
+
+# Save the trained model
+lbph_recognizer.save('firebase_augmented_mapping_distance.xml')
