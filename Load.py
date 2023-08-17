@@ -406,8 +406,13 @@ with open('name_mapping.json', 'r') as f:
     name_mapping = json.load(f)
 
 
-cred = credentials.Certificate('./key.json')
-firebase_admin.initialize_app(cred, {'storageBucket': 'images-23bb4.appspot.com'})
+# Determine whether you want to use Firebase or not
+want_to_use_firebase = True  # Set to True if you want to use Firebase, False otherwise
+
+# Initialize Firebase connection if needed
+if want_to_use_firebase:
+    cred = credentials.Certificate('./key.json')
+    firebase_admin.initialize_app(cred, {'storageBucket': 'images-23bb4.appspot.com'})
 
 print(fr)
 
