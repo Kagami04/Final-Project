@@ -417,16 +417,14 @@ if want_to_use_firebase:
 print(fr)
 
 # Create the face recognizer with the desired parameters
-lbph_face_classifier = cv2.face.LBPHFaceRecognizer.create(radius=1, neighbors=8, grid_x=8, grid_y=8)
-lbph_face_classifier.read('./firebase_augmented_mapping.xml')
+recognizer = cv2.face.LBPHFaceRecognizer.create(radius=1, neighbors=8, grid_x=8, grid_y=8)
+recognizer.read('./firebase.yml')
 
 cap = cv2.VideoCapture(0)  # If you want to recognize faces from a video, replace 0 with the video path
 known_faces_folder = './known_faces'
 unknown_faces_folder = './unknown_faces'
 
-
-
-threshold = 50
+threshold = 30
 
 # Create folders if they don't exist
 if not os.path.exists(known_faces_folder):
@@ -438,7 +436,6 @@ if not os.path.exists(unknown_faces_folder):
 snapshots_taken = {label: 0 for label in name_mapping.keys()}
 
 # Counter to keep track of "Not Registered" faces
-
 not_registered_counter = 0
 
 def save_snapshot(image, folder_path, file_name):
@@ -454,6 +451,7 @@ def upload_snapshot_to_firebase(image_path, destination_folder, file_name):
     blob.upload_from_filename(image_path)
 
     print('Snapshot uploaded to Firebase Storage')
+
 
 def take_snapshot(face_image, folder_path, label):
     global snapshots_taken, not_registered_counter
@@ -483,21 +481,23 @@ def take_snapshot(face_image, folder_path, label):
 
 # Get the height of the frame to draw the line slightly below the center
 frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-line_y = frame_height // 3  # Move the line higher by decreasing the value
+line_y = frame_height // 9  # Move the line higher by decreasing the value
 
 # Flag variable to track whether the line has been crossed by a face
 line_crossed = False
 
 while True:
-    ret, test_img = cap.read()
-    faces_detected, gray_img = fr.faceDetection(test_img)
-    #print("Faces Detected: ", faces_detected)
+    ret,frame=cap.read()
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    faces_detected, gray_img = fr.faceDetection(frame)
 
     # Draw a horizontal line where face detection and recognition start
-    cv2.line(test_img, (0, line_y), (test_img.shape[1], line_y), (0, 0, 255), 2)
+    cv2.line(frame, (0, line_y), (frame.shape[1], line_y), (0, 0, 255), 2)
 
     for (x, y, w, h) in faces_detected:
-        cv2.rectangle(test_img, (x, y), (x + w, y + h), (0, 0, 0), thickness=3)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 0), thickness=3)
 
         # Check if the face is above the line and the top of the face is above the line
         if y < line_y:
@@ -505,22 +505,22 @@ while True:
 
         roi_gray = gray_img[y:y + h, x:x + w]
 
-        # Save the original size face region as the snapshot
-        face_image = gray_img[y:y + h, x:x + w]
+        label, confidence = recognizer.predict(roi_gray)
 
-        label, confidence = lbph_face_classifier.predict(roi_gray)
         print("Confidence:", confidence)
         print("Label:", label)
-        fr.draw_rect(test_img, (x, y, w, h))
+        fr.draw_rect(frame, (x, y, w, h))
 
-        if confidence <= threshold:
+        if confidence < threshold:
             predicted_name = name_mapping[str(label)]
-            take_snapshot(face_image, known_faces_folder, (str(label)))
+            print("Name:", predicted_name)
+
         else:
             predicted_name = "Not Registered"
-            take_snapshot(face_image, unknown_faces_folder, -1)
+            print("Name:", predicted_name)
 
-        fr.put_text_with_background(test_img, predicted_name, x, y)
+        fr.put_text_with_background(frame, predicted_name, x, y)
+
 
         # Set the flag to True to indicate the line has been crossed
         line_crossed = True
@@ -529,7 +529,7 @@ while True:
     if len(faces_detected) == 0:
         line_crossed = False
 
-    resized_img = cv2.resize(test_img, (1000, 700))
+    resized_img = cv2.resize(frame, (1000, 700))
 
     cv2.imshow("Face Detection", resized_img)
     if cv2.waitKey(10) == ord('q'):
@@ -538,5 +538,4 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
-
 
