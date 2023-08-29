@@ -4,11 +4,11 @@ import os
 
 # Face detection is done
 def faceDetection(test_img):
-    gray_img = cv2.cvtColor(test_img, cv2.COLOR_BGR2GRAY)
-    face_cascade = cv2.CascadeClassifier(
-        r'C:\Users\HENDRIX\PycharmProjects\face_detection\haarcascade_frontalface_alt.xml')  # Give path to haar classifier as i have given
-    faces = face_cascade.detectMultiScale(gray_img, scaleFactor=1.2, minNeighbors=3)
-    return faces, gray_img
+    grayscale_image = cv2.cvtColor(test_img, cv2.COLOR_BGR2GRAY)
+    cascade = cv2.CascadeClassifier(
+        r'./haarcascade_frontalface_alt.xml')  # Give path to haar classifier as i have given
+    faces = cascade.detectMultiScale(grayscale_image,scaleFactor=1.1,minNeighbors=5,minSize=(60, 60), flags=cv2.CASCADE_SCALE_IMAGE)
+    return faces, grayscale_image
 
 
 # Labels for training data has been created
